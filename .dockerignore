@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+node_modules
+frontend/node_modules
+frontend/dist
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.venv
+venv
+config/simulator.json
+Dockerfile
+docker-compose*.yml

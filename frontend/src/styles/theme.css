@@ -1,0 +1,46 @@
+:root {
+  color-scheme: dark;
+
+  /* Ink scale — a deep, cool slate rather than pure black. */
+  --ink-950: #0b1117;
+  --ink-900: #0e151c;
+  --ink-850: #111922;
+  --ink-800: #131d26;
+  --ink-700: #182430;
+  --ink-600: #22303d;
+  --ink-500: #2c3d4c;
+
+  --line: rgba(126, 158, 184, 0.16);
+  --line-strong: rgba(126, 158, 184, 0.32);
+
+  --text: #dbe6ef;
+  --text-dim: #a9bccb;
+  --muted: #7f95a6;
+  --faint: #5b6f7e;
+
+  /* Signal accent — the instrument's own colour. */
+  --signal: #48c6d4;
+  --signal-soft: rgba(72, 198, 212, 0.14);
+  --signal-ink: #07272c;
+
+  --ok: #4fb98a;
+  --warn: #e0a54a;
+  --bad: #e0604f;
+  --unknown: #7d8a97;
+
+  --ok-soft: rgba(79, 185, 138, 0.14);
+  --warn-soft: rgba(224, 165, 74, 0.14);
+  --bad-soft: rgba(224, 96, 79, 0.14);
+  --unknown-soft: rgba(125, 138, 151, 0.14);
+
+  --focus: #7fd8e4;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --shadow: 0 22px 48px -28px rgba(0, 0, 0, 0.75);
+}

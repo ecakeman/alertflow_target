@@ -1,0 +1,15 @@
+{
+  "service": {
+    "name": "Demo Order API",
+    "version": "1.0.0"
+  },
+  "health": {
+    "mode": "normal",
+    "slow_delay_ms": 12000
+  },
+  "diagnostics": {
+    "mode": "normal",
+    "stale_by_seconds": 900,
+    "items": []
+  }
+}

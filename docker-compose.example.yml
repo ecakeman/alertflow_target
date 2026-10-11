@@ -1,0 +1,23 @@
+# Standalone deployment for Fault Lab only.
+# It is intentionally NOT combined with AlertFlow's compose file: the three
+# systems share HTTP addresses, not processes, code, databases or orchestration.
+#
+#   SIMULATOR_CONTROL_TOKEN=... docker compose -f docker-compose.example.yml up --build
+
+services:
+  fault-lab:
+    build: .
+    environment:
+      SIMULATOR_ADDR: ":8090"
+      SIMULATOR_CONTROL_TOKEN: "${SIMULATOR_CONTROL_TOKEN:?set SIMULATOR_CONTROL_TOKEN}"
+      SIMULATOR_DIAGNOSTICS_TOKEN: "${SIMULATOR_DIAGNOSTICS_TOKEN:-}"
+      SIMULATOR_CONFIG_PATH: /data/simulator.json
+      SIMULATOR_LOG_LEVEL: "${SIMULATOR_LOG_LEVEL:-info}"
+    ports:
+      - "8090:8090"
+    volumes:
+      - fault-lab-data:/data
+    restart: unless-stopped
+
+volumes:
+  fault-lab-data:
