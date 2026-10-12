@@ -15,6 +15,7 @@ from .config import Settings, load_settings
 from .routes_control import router as control_router
 from .routes_diagnostics import router as diagnostics_router
 from .routes_health import HealthEndpoint, router as health_router
+from .routes_scenarios import router as scenarios_router
 from .state_store import StateStore
 
 MAX_BODY_BYTES = 128 * 1024
@@ -77,6 +78,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(diagnostics_router)
     app.include_router(control_router)
+    app.include_router(scenarios_router)
 
     _mount_frontend(app, settings)
     return app

@@ -1,8 +1,12 @@
 """The read-only diagnostic evidence endpoint consumed by the Agent.
 
-Returns a snapshot that satisfies the Agent diagnostics v1 contract, plus a few
-deliberate modes (empty / unavailable / invalid / stale) so the Agent's handling
-of insufficient, missing, malformed or outdated evidence can be exercised.
+Serves the v2 diagnostic contract: rich, structured *internal state* evidence —
+component / dependency health, raised errors, resource and saturation pressure,
+recent changes and slow operations — so the Agent can reason about the cause of
+a failure, not merely restate it.
+
+Deliberate modes (empty / unavailable / invalid / stale) remain so the Agent's
+handling of insufficient, missing, malformed or outdated evidence is exercised.
 """
 
 from __future__ import annotations
@@ -10,15 +14,16 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse
 
 from .auth import check_token
-from .schemas import DiagnosticItem, DiagnosticsMode, ItemKind, SimulatorState
+from .profiles import PROFILES
+from .schemas import DiagnosticItem, DiagnosticsMode, SimulatorState
 
 router = APIRouter()
 
-SCHEMA_VERSION = "v1"
+SCHEMA_VERSION = "v2"
 
 
 def _rfc3339(value: datetime) -> str:
@@ -26,20 +31,48 @@ def _rfc3339(value: datetime) -> str:
 
 
 def _render_item(item: DiagnosticItem, observed_at: datetime) -> dict:
-    """Render one configured item into the v1 item shape.
-
-    ``observed_at`` is already shifted for stale mode by the caller.
-    """
+    """Render one configured item into the v2 item shape."""
     when = item.observed_at.astimezone(timezone.utc) if item.observed_at else observed_at
     payload: dict = {"kind": item.kind.value, "name": item.name, "observed_at": _rfc3339(when)}
-    if item.kind in (ItemKind.component_health, ItemKind.dependency_health):
-        payload["status"] = item.status.value if item.status else "unknown"
-        payload["summary"] = item.summary or ""
-    else:  # recent_error
-        payload["summary"] = item.summary or ""
+    if item.status is not None:
+        payload["status"] = item.status.value
+    if item.summary:
+        payload["summary"] = item.summary
+    if item.detail:
+        payload["detail"] = dict(item.detail)
     if item.attributes:
         payload["attributes"] = dict(item.attributes)
     return payload
+
+
+def _render_profile_item(raw: dict, now: datetime, shift: timedelta) -> dict:
+    """Render one profile-generated item; its epoch is ``now + offset - shift``."""
+    observed = now + timedelta(seconds=int(raw.get("_offset", 0))) - shift
+    payload: dict = {"kind": raw["kind"], "name": raw["name"], "observed_at": _rfc3339(observed)}
+    if raw.get("status"):
+        payload["status"] = raw["status"]
+    if raw.get("summary"):
+        payload["summary"] = raw["summary"]
+    if raw.get("detail"):
+        payload["detail"] = dict(raw["detail"])
+    if raw.get("attributes"):
+        payload["attributes"] = dict(raw["attributes"])
+    return payload
+
+
+def _service_block(state: SimulatorState) -> dict:
+    svc = state.service
+    block: dict = {
+        "name": svc.name,
+        "version": svc.version,
+        "env": svc.env,
+        "instance": svc.instance,
+        "region": svc.region,
+        "uptime_s": svc.uptime_s,
+    }
+    if svc.build:
+        block["build"] = dict(svc.build)
+    return block
 
 
 def build_snapshot(state: SimulatorState, now: datetime) -> dict:
@@ -50,17 +83,19 @@ def build_snapshot(state: SimulatorState, now: datetime) -> dict:
 
     items: list[dict] = []
     if diag.mode != DiagnosticsMode.empty:
-        for item in diag.items:
-            # Each item is shifted too so stale evidence is consistent.
-            item_observed = (item.observed_at or now) - shift
-            rendered = _render_item(item, observed_at)
-            rendered["observed_at"] = _rfc3339(item_observed)
-            items.append(rendered)
+        if diag.items:
+            for item in diag.items:
+                item_observed = (item.observed_at or now) - shift
+                rendered = _render_item(item, observed_at)
+                rendered["observed_at"] = _rfc3339(item_observed)
+                items.append(rendered)
+        elif diag.profile:
+            items = [_render_profile_item(raw, now, shift) for raw in PROFILES[diag.profile](now)]
 
     return {
         "schema_version": SCHEMA_VERSION,
         "observed_at": _rfc3339(observed_at),
-        "service": {"name": state.service.name, "version": state.service.version},
+        "service": _service_block(state),
         "items": items,
     }
 

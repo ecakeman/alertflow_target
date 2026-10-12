@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from conftest import apply_state
+from conftest import apply_state, make_state
 
 COMPONENT = {
     "kind": "component_health",
@@ -33,8 +33,12 @@ def _snapshot(client, diag_headers):
 def test_normal_snapshot_shape(client, control_headers, diag_headers):
     apply_state(client, control_headers, items=[COMPONENT, DEPENDENCY, ERROR])
     body = _snapshot(client, diag_headers).json()
-    assert body["schema_version"] == "v1"
-    assert body["service"] == {"name": "Demo Order API", "version": "1.0.0"}
+    assert body["schema_version"] == "v2"
+    assert body["service"]["name"] == "Demo Order API"
+    assert body["service"]["version"] == "1.0.0"
+    # v2 adds richer service metadata.
+    for key in ("env", "instance", "region", "uptime_s"):
+        assert key in body["service"]
     kinds = [item["kind"] for item in body["items"]]
     assert kinds == ["component_health", "dependency_health", "recent_error"]
     for item in body["items"]:
@@ -50,7 +54,7 @@ def test_empty_mode_returns_valid_but_empty(client, control_headers, diag_header
     resp = _snapshot(client, diag_headers)
     assert resp.status_code == 200
     body = resp.json()
-    assert body["schema_version"] == "v1"
+    assert body["schema_version"] == "v2"
     assert body["items"] == []
 
 
@@ -63,7 +67,7 @@ def test_unavailable_mode_returns_non_2xx(client, control_headers, diag_headers)
 def test_invalid_mode_violates_contract(client, control_headers, diag_headers):
     apply_state(client, control_headers, diag_mode="invalid")
     body = _snapshot(client, diag_headers).json()
-    assert body["schema_version"] != "v1"
+    assert body["schema_version"] != "v2"
     assert "version" not in body["service"]
     assert body["items"][0]["kind"] not in {"component_health", "dependency_health", "recent_error"}
     assert "observed_at" not in body["items"][0]
@@ -100,3 +104,40 @@ def test_since_until_accepted(client, diag_headers):
         headers=diag_headers,
     )
     assert resp.status_code == 200
+
+
+# -- v2: internal state, profiles and structured detail ----------------------
+
+
+def test_profile_expands_to_internal_evidence(client, control_headers, diag_headers):
+    apply_state(client, control_headers, profile="db_pool_exhaustion")
+    body = _snapshot(client, diag_headers).json()
+    assert body["schema_version"] == "v2"
+    kinds = {item["kind"] for item in body["items"]}
+    assert {"component_health", "dependency_health", "recent_error", "saturation", "resource"} <= kinds
+    # The evidence tells a timeline: the dependency degrades before errors appear.
+    by_kind = {item["kind"]: item["observed_at"] for item in body["items"]}
+    assert by_kind["dependency_health"] < by_kind["recent_error"]
+    # Structured detail rides along.
+    pool = next(i for i in body["items"] if i["name"] == "db_connection_pool" and i["kind"] == "component_health")
+    assert pool["detail"]["pool"]["waiting"] > 0
+    assert pool["status"] == "unhealthy"
+
+
+def test_unknown_profile_rejected(client, control_headers):
+    payload = make_state(profile="does_not_exist")
+    resp = client.put("/control/v1/state", json=payload, headers=control_headers)
+    assert resp.status_code == 422
+
+
+def test_detail_bounds_are_enforced(client, control_headers):
+    payload = make_state(
+        items=[{"kind": "component_health", "name": "db", "status": "healthy", "detail": {"big": "x" * 401}}]
+    )
+    assert client.put("/control/v1/state", json=payload, headers=control_headers).status_code == 422
+
+    payload = make_state(
+        items=[{"kind": "component_health", "name": "db", "status": "healthy",
+                "detail": {f"k{i}": "v" for i in range(25)}}]
+    )
+    assert client.put("/control/v1/state", json=payload, headers=control_headers).status_code == 422

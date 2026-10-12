@@ -67,11 +67,14 @@ def diag_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {DIAGNOSTICS_TOKEN}"}
 
 
-def make_state(*, health_mode="normal", slow_delay_ms=12000, diag_mode="normal", stale=900, items=None):
+def make_state(*, health_mode="normal", slow_delay_ms=12000, diag_mode="normal", stale=900, items=None, profile=None):
+    diagnostics = {"mode": diag_mode, "stale_by_seconds": stale, "items": items or []}
+    if profile is not None:
+        diagnostics["profile"] = profile
     return {
         "service": {"name": "Demo Order API", "version": "1.0.0"},
         "health": {"mode": health_mode, "slow_delay_ms": slow_delay_ms},
-        "diagnostics": {"mode": diag_mode, "stale_by_seconds": stale, "items": items or []},
+        "diagnostics": diagnostics,
     }
 
 

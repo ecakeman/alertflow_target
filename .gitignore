@@ -20,3 +20,6 @@ config/simulator.json
 .env
 .env.*
 !.env.example
+
+# 本地部署覆盖（合部署后由 AlertFlow 的 compose 管理）
+docker-compose.override.yml
